@@ -18,11 +18,144 @@
 # along with this program; if not, see <http://www.gnu.org/licenses/>
 #--
 
+
 import numpy as np
-from scipy.linalg import expm
-from horton import *
-import bisect
-from scipy.sparse.linalg import LinearOperator, eigsh, lgmres, minres, bicg, bicgstab, cg, cgs, gmres, qmr
+from horton import log
+
+
+__all__ = ['minimize_ntr']
+
+
+def minimize_ntr(objective, grms_threshold=1e-8, maxiter=128):
+    converged = False
+    counter = 0
+    trust_radius = 1.0
+    value = objective.value()
+    gradient = objective.gradient()
+    if log.do_high:
+        log('Number of unknowns: %i' % objective.dof)
+        log.blank()
+    if objective.dof == 0:
+        log('Since the number of unknowns is 0, there is nothing to optimize.')
+        return 0
+
+    trs = CGTrustRadiusSolver(objective, gradient, trust_radius, grms_threshold)
+    while maxiter is None or counter < maxiter:
+        # Status at beginning of iteration
+        grms = rms(gradient)
+        if log.do_high:
+            log('Counter:      %17i' % counter)
+            log('Value:        %17.10f' % value)
+            log('Gradient rms: %17.10e / %12.5e' % (grms, grms_threshold))
+        elif log.do_medium:
+            log('%4i  %17.10e  %12.5e  %12.5e' % (counter, value, grms, trust_radius))
+
+        # Check for convergence
+        if grms < grms_threshold:
+            log('CONVERGED!')
+            converged = True
+            break
+
+        # If we got here, construct a new step with the TRS.
+        if log.do_high:
+            log.blank()
+            log('   Trust radius: %.5e' % trust_radius)
+        delta, estimated_change, estimated_g = trs.solve()
+
+        if True:
+            # Sanity checks on the results from the trs, cost time
+            assert abs(estimated_change - (
+                np.dot(delta, gradient)
+                +0.5*np.dot(delta, objective.dot_hessian(delta))
+            )) < 1e-7
+            assert abs(estimated_g - gradient - objective.dot_hessian(delta)).max() < 1e-7
+
+        # Compute value and gradient at new point
+        objective.make_step(delta)
+        new_value = objective.value()
+        new_gradient = objective.gradient()
+        if log.do_high:
+            log('   Estimated objective change: %17.10e' % estimated_change)
+            log('   Actual objective change:    %17.10e' % (new_value - value))
+            log('   Estimated gradient RMS:  %17.10e' % rms(estimated_g))
+            log('   Actual    gradient RMS:  %17.10e' % rms(new_gradient))
+
+        # Check if step is acceptable
+        acceptable = True
+        if new_value >= value:
+            acceptable = False
+            if log.do_high:
+                log('   The objective did not decrease!')
+            if abs(estimated_change) < 1e-13*abs(value) and \
+               rms(new_gradient) < rms(gradient):
+                acceptable = True
+                if log.do_high:
+                    log('   However, the estmated value change is tiny and the gradient decreased.')
+
+        if not acceptable:
+            if log.do_high:
+                log('   Restarting step with reduced trust radius.')
+                log.blank()
+            # really not good enough:
+            # - do not accept step
+            objective.step_back()
+            # - increase step counter
+            counter += 1
+            # - decrease trust radius a lot
+            trust_radius *= 0.5
+            # If the objective has an approximate Hessian, i.e. dependent on previous
+            # calculations, the cache of the trust-radius solver must be dropped.
+            if objective.hessian_is_approximate:
+                trs.drop_cache()
+            trs.trust_radius = trust_radius
+            continue
+
+        if log.do_high:
+            log('   Accepting step.')
+
+        # 30% deviation on the estimated value change or gradient are
+        # considered to be within the trust region. It is OK for the value
+        # to be more than 30% below the estimated value.
+        v_crit = (new_value - (value + estimated_change))/abs(estimated_change)
+        g_crit = rms(estimated_g - new_gradient)/rms(estimated_g)
+        if log.do_high:
+            log('   Value Criterion:         %15.1f%%' % (v_crit*100))
+            log('   Gradient Criterion:      %15.1f%%' % (g_crit*100))
+        if v_crit > 0.3 or g_crit > 0.3:
+            if log.do_high:
+                log('   Poor extrapolation of value or gradient!')
+                log('   Trust radius will be reduced.')
+            trust_radius *= 0.7
+            if g_crit > 3.0:
+                if log.do_high:
+                    log('   Gradient criterion is very high!')
+                    log('   Extra reduction of trust radius.')
+                trust_radius *= 0.5
+        else:
+            if log.do_high:
+                log('   Good extrapolations!')
+                log('   Trust radius will be slightly increased.')
+            trust_radius *= 1.3
+        if log.do_high:
+            log.blank()
+
+        # If v_crit is way off and the hessian is approximate, do a Hessian reset.
+        if objective.hessian_is_approximate and abs(v_crit) > 10:
+            if log.do_high:
+                log('Resetting Hessian because of large value criterion.')
+            objective.reset_hessian()
+
+        # increase step counter
+        counter += 1
+        # accept step
+        value = new_value
+        gradient = new_gradient
+        trs = CGTrustRadiusSolver(objective, gradient, trust_radius, grms_threshold)
+
+    if not converged:
+        raise RuntimeError('Convergence failed')
+
+    return counter
 
 
 def rms(arr):
@@ -195,140 +328,3 @@ class CGTrustRadiusSolver(object):
 
         # Done
         return solution, change, -residual
-
-
-def minimize_ntr(objective, grms_threshold=1e-8, maxiter=128):
-    converged = False
-    counter = 0
-    trust_radius = 1.0
-    value = objective.value()
-    gradient = objective.gradient()
-    if log.do_high:
-        log('Number of unknowns: %i' % objective.dof)
-        log.blank()
-    if objective.dof == 0:
-        log('Since the number of unknowns is 0, there is nothing to optimize.')
-        return 0
-
-    trs = CGTrustRadiusSolver(objective, gradient, trust_radius, grms_threshold)
-    while maxiter is None or counter < maxiter:
-        # Status at beginning of iteration
-        grms = rms(gradient)
-        if log.do_high:
-            log('Counter:      %17i' % counter)
-            log('Value:        %17.10f' % value)
-            log('Gradient rms: %17.10e / %12.5e' % (gradient_rms, grms_threshold))
-        elif log.do_medium:
-            log('%4i  %17.10e  %12.5e  %12.5e' % (counter, value, grms, trust_radius))
-
-        # Check for convergence
-        if grms < grms_threshold:
-            log('CONVERGED!')
-            converged = True
-            break
-
-        # If we got here, construct a new step with the TRS.
-        if log.do_high:
-            log.blank()
-            log('   Trust radius: %.5e' % trust_radius)
-        delta, estimated_change, estimated_g = trs.solve()
-
-        if True:
-            # Sanity checks on the results from the trs, cost time
-            assert abs(estimated_change - (
-                np.dot(delta, gradient)
-                +0.5*np.dot(delta, objective.dot_hessian(delta))
-            )) < 1e-7
-            assert abs(estimated_g - gradient - objective.dot_hessian(delta)).max() < 1e-7
-
-        # Compute value and gradient at new point
-        objective.make_step(delta)
-        new_value = objective.value()
-        new_gradient = objective.gradient()
-        if log.do_high:
-            log('   Estimated objective change: %17.10e' % estimated_change)
-            log('   Actual objective change:    %17.10e' % (new_value - value))
-            log('   Estimated gradient RMS:  %17.10e' % rms(estimated_g))
-            log('   Actual    gradient RMS:  %17.10e' % rms(new_gradient))
-
-        # Check if step is acceptable
-        acceptable = True
-        if new_value >= value:
-            acceptable = False
-            if log.do_high:
-                log('   The objective did not decrease!')
-            if abs(estimated_change) < 1e-13*abs(value) and \
-               rms(new_gradient) < rms(gradient):
-                acceptable = True
-                if log.do_high:
-                    log('   However, the estmated value change is tiny and the gradient decreased.')
-
-        if not acceptable:
-            if log.do_high:
-                log('   Restarting step with reduced trust radius.')
-                log.blank()
-            # really not good enough:
-            # - do not accept step
-            objective.step_back()
-            # - increase step counter
-            counter += 1
-            # - decrease trust radius a lot
-            trust_radius *= 0.5
-            # If the objective has an approximate Hessian, i.e. dependent on previous
-            # calculations, the cache of the trust-radius solver must be dropped.
-            if objective.hessian_is_approximate:
-                trs.drop_cache()
-            trs.trust_radius = trust_radius
-            continue
-
-        if log.do_high:
-            log('   Accepting step.')
-
-        # 30% deviation on the estimated value change or gradient are
-        # considered to be within the trust region. It is OK for the value
-        # to be more than 30% below the estimated value.
-        v_crit = (new_value - (value + estimated_change))/abs(estimated_change)
-        g_crit = rms(estimated_g - new_gradient)/rms(estimated_g)
-        if log.do_high:
-            log('   Value Criterion:         %15.1f%%' % (v_crit*100))
-            log('   Gradient Criterion:      %15.1f%%' % (g_crit*100))
-        if v_crit > 0.3 or g_crit > 0.3:
-            if log.do_high:
-                log('   Poor extrapolation of value or gradient!')
-                log('   Trust radius will be reduced.')
-            trust_radius *= 0.7
-            if g_crit > 3.0:
-                if log.do_high:
-                    log('   Gradient criterion is very high!')
-                    log('   Extra reduction of trust radius.')
-                trust_radius *= 0.5
-        else:
-            if log.do_high:
-                log('   Good extrapolations!')
-                log('   Trust radius will be slightly increased.')
-            trust_radius *= 1.3
-        if log.do_high:
-            log.blank()
-
-        # If v_crit is way off and the hessian is approximate, do a Hessian reset.
-        if objective.hessian_is_approximate and abs(v_crit) > 10:
-            if log.do_high:
-                log('Resetting Hessian because of large value criterion.')
-            objective.reset_hessian()
-
-        # increase step counter
-        counter += 1
-        # accept step
-        value = new_value
-        gradient = new_gradient
-        trs = TrustRadiusSolver(objective, gradient, trust_radius, self.threshold)
-
-    if not converged:
-        raise RunTimeError('Convergence failed')
-
-    return counter
-
-
-#
-# ----------------------------------- TESTS -----------------------------------
-#

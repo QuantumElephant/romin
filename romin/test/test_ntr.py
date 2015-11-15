@@ -17,8 +17,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>
 #--
+#pylint: skip-file
 
 
-from romin.deriv_check import *
-from romin.ntr import *
-from romin.objective import *
+from romin import *
+
+
+def test_min_ntr_rosenbrock():
+    from horton import log
+    log.set_level(log.high)
+    fn = Rosenbrock(1, 10, np.array([2.0, 5.0]))
+    minimize_ntr(fn)
+    assert abs(fn.gradient()).max() < 1e-7
