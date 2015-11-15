@@ -24,8 +24,8 @@ from romin import *
 
 
 def test_min_ntr_rosenbrock():
-    from horton import log
-    log.set_level(log.high)
-    fn = Rosenbrock(1, 10, np.array([2.0, 5.0]))
-    minimize_ntr(fn)
-    assert abs(fn.gradient()).max() < 1e-7
+    for b in xrange(3, 100, 10):
+        fn = Rosenbrock(1, b, np.array([2.0, 5.0]))
+        minimize_ntr(fn)
+        assert abs(fn.gradient()).max() < 1e-7
+        assert abs(fn.x - 1.0).max() < 1e-7

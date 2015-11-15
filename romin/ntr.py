@@ -117,7 +117,7 @@ def minimize_ntr(objective, grms_threshold=1e-8, maxiter=128):
         # considered to be within the trust region. It is OK for the value
         # to be more than 30% below the estimated value.
         v_crit = (new_value - (value + estimated_change))/abs(estimated_change)
-        g_crit = rms(estimated_g - new_gradient)/rms(estimated_g)
+        g_crit = rms(estimated_g - new_gradient)/rms(new_gradient)
         if log.do_high:
             log('   Value Criterion:         %15.1f%%' % (v_crit*100))
             log('   Gradient Criterion:      %15.1f%%' % (g_crit*100))
