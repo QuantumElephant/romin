@@ -96,7 +96,7 @@ def deriv_error(f, g, x, eps_x=1e-4, order=8):
     return delta, delta_approx
 
 
-def deriv_error_array(f, g, x, eps_x=1e-4, order=8, nrep=None):
+def deriv_error_array(f, g, x, eps_x=1e-4, order=8, nrep=None, weights=1):
     '''Extension of deriv_error for functions that take arrays as arguments
 
     This function performs many one-dimensional tests with deriv_error along randomly
@@ -116,6 +116,9 @@ def deriv_error_array(f, g, x, eps_x=1e-4, order=8, nrep=None):
             The number of grid points in the quadrature. [default=8]
     nrep : int
            The number of random directions. [default=x.size**2]
+    weights : np.ndarray
+              An array with the same shape as x, specifies which directions should be
+              scanned most often. [default=1]
 
     Returns
     -------
@@ -133,7 +136,7 @@ def deriv_error_array(f, g, x, eps_x=1e-4, order=8, nrep=None):
     for irep in xrange(nrep):
         # Generate a generalized random unit vector.
         while True:
-            unit = np.random.normal(0, 1, x.shape)
+            unit = np.random.normal(0, 1, x.shape)*weights
             norm = np.sqrt((unit**2).sum())
             if norm > 1e-3:
                 unit /= norm
@@ -149,8 +152,8 @@ def deriv_error_array(f, g, x, eps_x=1e-4, order=8, nrep=None):
     return results
 
 
-def deriv_check(f, g, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, discard=0.1,
-                verbose=False):
+def deriv_check(f, g, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, weights=1,
+                discard=0.1, verbose=False):
     '''Checker for the implementation of partial derivatives
 
     Parameters
@@ -169,6 +172,9 @@ def deriv_check(f, g, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, discard
            The number of random directions. [defaults=x.size**2]
     rel_ftol : float
               The allowed relative error between delta and delta_approx. [default=1e-3]
+    weights : np.ndarray
+              An array with the same shape as x, specifies which directions should be
+              scanned most often. [default=1]
     discard : float
               The fraction of smallest deltas to discard, together with there
               corresponding deltas_approx. [default=0.1]
@@ -187,7 +193,7 @@ def deriv_check(f, g, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, discard
         if isinstance(x, float):
             results.append(deriv_error(f, g, x, eps_x, order))
         elif isinstance(x, np.ndarray):
-            results.extend(deriv_error_array(f, g, x, eps_x, order, nrep))
+            results.extend(deriv_error_array(f, g, x, eps_x, order, nrep, weights))
         else:
             raise NotImplementedError
     # make arrays
