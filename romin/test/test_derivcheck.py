@@ -73,3 +73,17 @@ def check_deriv_check_extra1(nx):
 def test_deriv_check_extra1():
     yield check_deriv_check_extra1, 1
     yield check_deriv_check_extra1, 10
+
+
+def check_deriv_check_nd_zeros(nx, x_shape):
+    f = lambda x: np.ones(x.shape)
+    g = lambda x: np.zeros(x.shape)
+    xs = [np.random.normal(0, 1, x_shape) for ix in xrange(nx)]
+    deriv_check(f, g, xs)
+
+
+def test_deriv_check_nd_zeros():
+    yield check_deriv_check_nd, 1, (10, )
+    yield check_deriv_check_nd, 1, (3, 4)
+    yield check_deriv_check_nd, 10, (10, )
+    yield check_deriv_check_nd, 10, (3, 4)
