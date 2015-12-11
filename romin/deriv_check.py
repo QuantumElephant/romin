@@ -204,9 +204,11 @@ def deriv_check(f, g, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, discard
     # some info on screen
     if verbose:
         print 'Number of comparisons: %i' % len(deltas)
-        ratios = abs(deltas - deltas_approx)/abs(deltas)
-        print 'Best:  %10.3e' % ratios.min()
-        print 'Worst: %10.3e' % ratios.max()
+        ratios = abs((deltas - deltas_approx)/deltas)
+        print 'Best:  %10.3e' % np.nanmin(ratios)
+        print 'Worst: %10.3e' % np.nanmax(ratios)
+        if np.any(np.isnan(ratios)):
+            print 'Warning: encountered NaN.'
         #abs(deltas - deltas_approx) < rel_ftol*abs(deltas)
     # final test
-    assert np.all(abs(deltas - deltas_approx) < rel_ftol*abs(deltas))
+    assert np.all(abs(deltas - deltas_approx) <= rel_ftol*abs(deltas))
