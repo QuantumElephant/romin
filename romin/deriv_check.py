@@ -156,25 +156,34 @@ def deriv_check(f, g, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, weights
                 discard=0.1, verbose=False):
     '''Checker for the implementation of partial derivatives
 
+    This function performs a Gaussian quadrature using g as integrand to approximate
+    differences between function values of f. The interval for the integration is a small
+    range around one or more reference points, xs. If the argument of f and g is an array,
+    random line scans are done around the reference point.
+
     Parameters
     ----------
     f : function
         Computes the function value for a given x.
     g : function
         Computes the derivative for a given x.
-    x : np.ndarray
-        The reference point for multiple calls to deriv_error.
+    xs : float, np.ndarray, or list thereof
+         Reference point(s) for deriv_error or deriv_error_array. If only one float or array
+         is given, it is the only reference point. When a list is given, deriv_error or
+         derive_error_array is called for every reference point in the list.
     eps_x : float
-            The half width of the interval for deriv_error. [default=1e-4]
+            The half width of the interval for deriv_error or deriv_error_array.
+            [default=1e-4]
     order : int (2, 4, 8, 16)
             The number of grid points in the quadrature. [default=8]
     nrep : int
-           The number of random directions. [defaults=x.size**2]
+           The number of random directions for one reference point, in case xs is an
+           array. It is ignored otherwise. [defaults=xs.size**2]
     rel_ftol : float
               The allowed relative error between delta and delta_approx. [default=1e-3]
     weights : np.ndarray
-              An array with the same shape as x, specifies which directions should be
-              scanned most often. [default=1]
+              An array with the same shape as xs, specifies which directions should be
+              scanned more often. [default=1]
     discard : float
               The fraction of smallest deltas to discard, together with there
               corresponding deltas_approx. [default=0.1]
@@ -216,6 +225,5 @@ def deriv_check(f, g, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, weights
         print 'Worst: %10.3e' % np.nanmax(ratios)
         if np.any(np.isnan(ratios)):
             print 'Warning: encountered NaN.'
-        #abs(deltas - deltas_approx) < rel_ftol*abs(deltas)
     # final test
     assert np.all(abs(deltas - deltas_approx) <= rel_ftol*abs(deltas))
