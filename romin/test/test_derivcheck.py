@@ -91,7 +91,7 @@ def test_deriv_check_nd_zeros():
     yield check_deriv_check_nd, 10, (3, 4)
 
 
-def check_deriv_check_weights():
+def test_deriv_check_nd_weights():
     # function is indeterminate for x[0] <= 1
     def f(x):
         with np.errstate(divide='raise'):
@@ -107,7 +107,3 @@ def check_deriv_check_weights():
     # reduce weight on x[0] so that romin does not search so far
     weights = np.array([1.e-4, 1.0, 1.0])
     deriv_check(f, g, xs, 0.1, 16, weights=weights)
-
-
-def test_deriv_check_nd_weights():
-    yield check_deriv_check_weights()
