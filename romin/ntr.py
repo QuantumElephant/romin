@@ -20,7 +20,6 @@
 
 
 import numpy as np
-from horton import log
 
 
 __all__ = ['rms', 'minimize_objective_ntr']
@@ -31,7 +30,7 @@ class ConvergenceFailure(Exception):
     pass
 
 
-def minimize_objective_ntr(objective, grms_threshold=1e-7, maxiter=128):
+def minimize_objective_ntr(objective, grms_threshold=1e-7, maxiter=128, verbose=0):
     """Minimize the objective function
 
     Parameters
@@ -44,6 +43,8 @@ def minimize_objective_ntr(objective, grms_threshold=1e-7, maxiter=128):
     maxiter : int
               The maximum number of iterations. When set to None, the number of iterations
               is unlimited.
+    verbose : int
+              Verbosity level. 0=silent, 1=normal, 2=chatterbox
 
     Returns
     -------
@@ -64,37 +65,39 @@ def minimize_objective_ntr(objective, grms_threshold=1e-7, maxiter=128):
     # Conpute the current value and gradient of the objective.
     value = objective.value()
     gradient = objective.gradient()
-    if log.do_high:
-        log('Number of unknowns: %i' % objective.dof)
-        log.blank()
+    if verbose >= 2:
+        print 'Number of unknowns: %i' % objective.dof
+        print
     if objective.dof == 0:
-        log('Since the number of unknowns is 0, there is nothing to optimize.')
+        if verbose >= 1:
+            print 'Since the number of unknowns is 0, there is nothing to optimize.'
         return 0
 
     # Create a trust-radius solver.
-    trs = CGTrustRadiusSolver(objective, gradient, 1.0, grms_threshold)
+    trs = CGTrustRadiusSolver(objective, gradient, 1.0, grms_threshold, verbose)
 
     # Main loop of the newton trust-radius solver
     while maxiter is None or counter < maxiter:
         # Status at beginning of iteration
         grms = rms(gradient)
-        if log.do_high:
-            log('Counter:      %17i' % counter)
-            log('Value:        %17.10f' % value)
-            log('Gradient rms: %17.10e / %12.5e' % (grms, grms_threshold))
-        elif log.do_medium:
-            log('%4i  %17.10e  %12.5e  %12.5e' % (counter, value, grms, trs.trust_radius))
+        if verbose >= 2:
+            print 'Counter:      %17i' % counter
+            print 'Value:        %17.10f' % value
+            print 'Gradient rms: %17.10e / %12.5e' % (grms, grms_threshold)
+        elif verbose >= 1:
+            print '%4i  %17.10e  %12.5e  %12.5e' % (counter, value, grms, trs.trust_radius)
 
         # Check for convergence
         if grms < grms_threshold:
-            log('CONVERGED!')
+            if verbose >= 1:
+                print 'CONVERGED!'
             converged = True
             break
 
         # If we got here, construct a new step with the TRS.
-        if log.do_high:
-            log.blank()
-            log('   Trust radius: %.5e' % trs.trust_radius)
+        if verbose >= 2:
+            print
+            print '   Trust radius: %.5e' % trs.trust_radius
         delta, estimated_change, estimated_g = trs.solve()
 
         if True:
@@ -109,28 +112,28 @@ def minimize_objective_ntr(objective, grms_threshold=1e-7, maxiter=128):
         objective.make_step(delta)
         new_value = objective.value()
         new_gradient = objective.gradient()
-        if log.do_high:
-            log('   Estimated objective change: %17.10e' % estimated_change)
-            log('   Actual objective change:    %17.10e' % (new_value - value))
-            log('   Estimated gradient RMS:     %17.10e' % rms(estimated_g))
-            log('   Actual    gradient RMS:     %17.10e' % rms(new_gradient))
+        if verbose >= 2:
+            print '   Estimated objective change: %17.10e' % estimated_change
+            print '   Actual objective change:    %17.10e' % (new_value - value)
+            print '   Estimated gradient RMS:     %17.10e' % rms(estimated_g)
+            print '   Actual    gradient RMS:     %17.10e' % rms(new_gradient)
 
         # Check if step is acceptable
         acceptable = True
         if new_value >= value:
             acceptable = False
-            if log.do_high:
-                log('   The objective did not decrease!')
+            if verbose >= 2:
+                print '   The objective did not decrease!'
             if abs(estimated_change) < 1e-13*abs(value) and \
                rms(new_gradient) < rms(gradient):
                 acceptable = True
-                if log.do_high:
-                    log('   However, the estmated value change is tiny and the gradient decreased.')
+                if verbose >= 2:
+                    print '   However, the estmated value change is tiny and the gradient decreased.'
 
         if not acceptable:
-            if log.do_high:
-                log('   Restarting step with reduced trust radius.')
-                log.blank()
+            if verbose >= 2:
+                print '   Restarting step with reduced trust radius.'
+                print
             # really not good enough:
             # - do not accept step
             objective.step_back()
@@ -144,39 +147,39 @@ def minimize_objective_ntr(objective, grms_threshold=1e-7, maxiter=128):
                 trs.drop_cache()
             continue
 
-        if log.do_high:
-            log('   Accepting step.')
+        if verbose >= 2:
+            print '   Accepting step.'
 
         # 30% deviation on the estimated value change or gradient are
         # considered to be within the trust region. It is OK for the value
         # to be more than 30% below the estimated value.
         v_crit = (new_value - (value + estimated_change))/abs(estimated_change)
         g_crit = rms(estimated_g - new_gradient)/rms(new_gradient)
-        if log.do_high:
-            log('   Value Criterion (ignored):    %15.1f%%' % (v_crit*100))
-            log('   Gradient Criterion:           %15.1f%%' % (g_crit*100))
+        if verbose >= 2:
+            print '   Value Criterion (ignored):    %15.1f%%' % (v_crit*100)
+            print '   Gradient Criterion:           %15.1f%%' % (g_crit*100)
         if g_crit > 0.5:
-            if log.do_high:
-                log('   Poor extrapolation of gradient!')
-                log('   Trust radius will be reduced.')
+            if verbose >= 2:
+                print '   Poor extrapolation of gradient!'
+                print '   Trust radius will be reduced.'
             trs.trust_radius *= 0.7
             if g_crit > 3.0:
-                if log.do_high:
-                    log('   Gradient criterion is very high!')
-                    log('   Extra reduction of trust radius.')
+                if verbose >= 2:
+                    print '   Gradient criterion is very high!'
+                    print '   Extra reduction of trust radius.'
                 trs.trust_radius *= 0.5
         else:
-            if log.do_high:
-                log('   Good extrapolations!')
-                log('   Trust radius will be slightly increased.')
+            if verbose >= 2:
+                print '   Good extrapolations!'
+                print '   Trust radius will be slightly increased.'
             trs.trust_radius *= 1.3
-        if log.do_high:
-            log.blank()
+        if verbose >= 2:
+            print
 
         # If v_crit is way off and the hessian is approximate, do a Hessian reset.
         if objective.hessian_is_approximate and abs(v_crit) > 10:
-            if log.do_high:
-                log('Resetting Hessian because of large value criterion.')
+            if verbose >= 2:
+                print 'Resetting Hessian because of large value criterion.'
             objective.reset_hessian()
 
         # increase step counter
@@ -205,7 +208,7 @@ class CGTrustRadiusSolver(object):
     until a step intersects with the trust sphere. The intersection is the approximate
     solution.
     '''
-    def __init__(self, objective, gradient, trust_radius, grms_threshold):
+    def __init__(self, objective, gradient, trust_radius, grms_threshold, verbose=0):
         '''Initialize the trust-radius solver
 
         Parameters
@@ -219,11 +222,14 @@ class CGTrustRadiusSolver(object):
         grms_threshold : float
                          A convergence threshold for the root-mean-square value of the
                          gradient.
+        verbose : int
+                  Verbosity level. 0=silent, 1=normal, 2=chatterbox
         '''
         self.objective = objective
         self.gradient = gradient
         self.trust_radius = trust_radius
         self.grms_threshold = grms_threshold
+        self.verbose = verbose
         self.cache = {}
 
     def drop_cache(self):
@@ -295,8 +301,8 @@ class CGTrustRadiusSolver(object):
                       solution relative to the center of the sphere.
         '''
         # Initialization of the CG algorithm
-        if log.do_high:
-            log('   Iter        Radius  Residual RMS      E Change')
+        if self.verbose >= 2:
+            print '   Iter        Radius  Residual RMS      E Change'
         solution = np.zeros(len(self.gradient))
         residual = -self.gradient
         direction = residual.copy()
@@ -317,11 +323,11 @@ class CGTrustRadiusSolver(object):
 
             # Compute the estimated change in objective and report
             new_change = 0.5*np.dot(self.gradient - residual, solution)
-            if log.do_high:
-                log('   %4i  %12.5e  %12.5e  %12.5e  %12.5e  %12.5e' % (
+            if self.verbose >= 2:
+                print '   %4i  %12.5e  %12.5e  %12.5e  %12.5e  %12.5e' % (
                     irep, radius_sq**0.5, residual_rms, new_change,
                     alpha, beta
-                ))
+                )
 
             # Do not allow an increase in the estimated change of objective. This would
             # correspond to a bug.
@@ -368,13 +374,13 @@ class CGTrustRadiusSolver(object):
         radius_sq = np.dot(solution, solution)
         residual = -self.gradient-self.dot_hessian(solution)
         new_change = 0.5*np.dot(self.gradient - residual, solution)
-        if log.do_high:
+        if self.verbose >= 2:
             residual_sq = np.dot(residual, residual)
             residual_rms = (residual_sq/len(residual))**0.5
-            log('   %4s  %12.5e  %12.5e  %12.5e  %12.5e  %12.5e' % (
+            print '   %4s  %12.5e  %12.5e  %12.5e  %12.5e  %12.5e' % (
                 status, radius_sq**0.5, residual_rms, new_change,
                 alpha, beta
-            ))
+            )
 
         # Do not allow an increase in the estimated change of the objective. That would
         # correspond to a bug.
