@@ -23,13 +23,45 @@ import numpy as np
 from horton import log
 
 
-__all__ = ['minimize_ntr']
+__all__ = ['minimize_objective_ntr']
 
 
-def minimize_ntr(objective, grms_threshold=1e-8, maxiter=128):
+class ConvergenceFailure(Exception):
+    """An error raised when the minimizer fails to converge in the given number of steps"""
+    pass
+
+
+def minimize_objective_ntr(objective, grms_threshold=1e-8, maxiter=128):
+    """Minimize the objective function
+
+    Parameters
+    ----------
+    objective : Objective
+                The objective to be minimized.
+    grms_threshold : float
+                     A convergence threshold for the root-mean-square value of the
+                     gradient.
+    maxiter : int
+              The maximum number of iterations. When set to None, the number of iterations
+              is unlimited.
+
+    Returns
+    -------
+    coutner : int
+              The number of iterations that were needed to reach convergence.
+
+
+    Raises
+    ------
+    ConvergenceFailure
+        When the minimizer cannot satisfy the convergence criteria in maxiter steps.
+    """
+
+    # Initialize some variables
     converged = False
     counter = 0
-    trust_radius = 1.0
+
+    # Conpute the current value and gradient of the objective.
     value = objective.value()
     gradient = objective.gradient()
     if log.do_high:
@@ -39,7 +71,10 @@ def minimize_ntr(objective, grms_threshold=1e-8, maxiter=128):
         log('Since the number of unknowns is 0, there is nothing to optimize.')
         return 0
 
-    trs = CGTrustRadiusSolver(objective, gradient, trust_radius, grms_threshold)
+    # Create a trust-radius solver.
+    trs = CGTrustRadiusSolver(objective, gradient, 1.0, grms_threshold)
+
+    # Main loop of the newton trust-radius solver
     while maxiter is None or counter < maxiter:
         # Status at beginning of iteration
         grms = rms(gradient)
@@ -48,7 +83,7 @@ def minimize_ntr(objective, grms_threshold=1e-8, maxiter=128):
             log('Value:        %17.10f' % value)
             log('Gradient rms: %17.10e / %12.5e' % (grms, grms_threshold))
         elif log.do_medium:
-            log('%4i  %17.10e  %12.5e  %12.5e' % (counter, value, grms, trust_radius))
+            log('%4i  %17.10e  %12.5e  %12.5e' % (counter, value, grms, trs.trust_radius))
 
         # Check for convergence
         if grms < grms_threshold:
@@ -59,7 +94,7 @@ def minimize_ntr(objective, grms_threshold=1e-8, maxiter=128):
         # If we got here, construct a new step with the TRS.
         if log.do_high:
             log.blank()
-            log('   Trust radius: %.5e' % trust_radius)
+            log('   Trust radius: %.5e' % trs.trust_radius)
         delta, estimated_change, estimated_g = trs.solve()
 
         if True:
@@ -102,12 +137,11 @@ def minimize_ntr(objective, grms_threshold=1e-8, maxiter=128):
             # - increase step counter
             counter += 1
             # - decrease trust radius a lot
-            trust_radius *= 0.5
+            trs.trust_radius *= 0.5
             # If the objective has an approximate Hessian, i.e. dependent on previous
             # calculations, the cache of the trust-radius solver must be dropped.
             if objective.hessian_is_approximate:
                 trs.drop_cache()
-            trs.trust_radius = trust_radius
             continue
 
         if log.do_high:
@@ -125,17 +159,17 @@ def minimize_ntr(objective, grms_threshold=1e-8, maxiter=128):
             if log.do_high:
                 log('   Poor extrapolation of value or gradient!')
                 log('   Trust radius will be reduced.')
-            trust_radius *= 0.7
+            trs.trust_radius *= 0.7
             if g_crit > 3.0:
                 if log.do_high:
                     log('   Gradient criterion is very high!')
                     log('   Extra reduction of trust radius.')
-                trust_radius *= 0.5
+                trs.trust_radius *= 0.5
         else:
             if log.do_high:
                 log('   Good extrapolations!')
                 log('   Trust radius will be slightly increased.')
-            trust_radius *= 1.3
+            trs.trust_radius *= 1.3
         if log.do_high:
             log.blank()
 
@@ -150,10 +184,11 @@ def minimize_ntr(objective, grms_threshold=1e-8, maxiter=128):
         # accept step
         value = new_value
         gradient = new_gradient
-        trs = CGTrustRadiusSolver(objective, gradient, trust_radius, grms_threshold)
+        trs.gradient = gradient
+        trs.drop_cache()
 
     if not converged:
-        raise RuntimeError('Convergence failed')
+        raise ConvergenceFailure('Convergence failed in %i steps.' % maxiter)
 
     return counter
 
@@ -164,7 +199,27 @@ def rms(arr):
 
 
 class CGTrustRadiusSolver(object):
+    '''Conjugate gradient algorithm for the trust-radius problem.
+
+    This implementation finds an approximate solution: it keeps taking regular CG steps
+    until a step intersects with the trust sphere. The intersection is the approximate
+    solution.
+    '''
     def __init__(self, objective, gradient, trust_radius, grms_threshold):
+        '''Initialize the trust-radius solver
+
+        Parameters
+        ----------
+        objective : Objective
+                    The objective to be minimized.
+        gradient : np.ndarray, shape=(objective.dof,)
+                   The gradient of the objective at the initial point.
+        trust_radius : float
+                       The initial trust radius
+        grms_threshold : float
+                         A convergence threshold for the root-mean-square value of the
+                         gradient.
+        '''
         self.objective = objective
         self.gradient = gradient
         self.trust_radius = trust_radius
@@ -172,9 +227,11 @@ class CGTrustRadiusSolver(object):
         self.cache = {}
 
     def drop_cache(self):
+        """Drop the cache of previously evaluated hessian-vector products"""
         self.cache = {}
 
     def dot_hessian(self, x):
+        """Calls self.objective.dot_hessian but also caches the results"""
         key = tuple(x)
         result = self.cache.get(key)
         if result is None:
@@ -252,7 +309,7 @@ class CGTrustRadiusSolver(object):
         change = 0.0
 
         # Main CG loop
-        for irep in xrange(len(self.gradient)):
+        for irep in xrange(self.objective.dof):
             # Check for convergence
             if residual_rms < self.grms_threshold:
                 status = 'conv'
