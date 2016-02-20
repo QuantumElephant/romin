@@ -23,7 +23,7 @@ import numpy as np
 from romin.deriv_check import deriv_check
 
 
-__all__ = ['Objective', 'HessianModelWrapper']
+__all__ = ['Objective', 'HessianModelWrapper', 'UserObjective']
 
 
 class Objective(object):
@@ -193,3 +193,73 @@ class HessianModelWrapper(Objective):
     def test_dot_hessian(self, xs, y, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3,
                          weights=1, discard=0.1, verbose=False):
         raise NotImplementedError
+
+
+class UserObjective(Objective):
+    """An objective based on user-provided functions"""
+    def __init__(self, x0, value, gradient, hessian, dot_hessian):
+        """Initialize the UserObjective instance
+
+        Parameters
+        ----------
+        x0 : np.ndarray, shape=(n,)
+             The initial guess of the minimizer.
+        value : function
+                A function that computes the value of the objective for a given argument
+                x.
+        gradient : function
+                   A function that computes the gradient of the objective for a given
+                   argument x.
+        hessian : function
+                  A function that computes the Hessian of the objective for a given
+                  argument x.
+        dot_hessian : function
+                      A function that computes the dot product of the Hessian of the
+                      objective with a test vector y, for a given argument x:
+                      dot_hessian(x, y)
+        """
+        self.x = np.array(x0)
+        if len(self.x.shape) != 1:
+            raise TypeError('The initial argument x0 must be a simply numpy vector.')
+        self.value_fn = value
+        self.gradient_fn = gradient
+        self.hessian_fn = hessian
+        self.dot_hessian_fn = dot_hessian
+
+    @property
+    def dof(self):
+        '''The number of degrees of freedom'''
+        return len(self.x)
+
+    @property
+    def hessian_is_approximate(self):
+        '''Whether the Hessian is approximate and history-dependent'''
+        return False
+
+    def value(self):
+        '''The value of the objective in the current point'''
+        return self.value_fn(self.x)
+
+    def gradient(self):
+        '''The gradient of the objective in the current point'''
+        return self.gradient_fn(self.x)
+
+    def hessian(self):
+        ''''The Hessian of the objective in the current point'''
+        return self.hessian_fn(self.x)
+
+    def dot_hessian(self, y):
+        '''The dot product of the Hessian with a test vector in the current point'''
+        return self.dot_hessian_fn(self.x, y)
+
+    def make_step(self, delta_x):
+        '''Apply the given step to the current point'''
+        self.old_x = self.x.copy()
+        self.x += delta_x
+
+    def step_back(self):
+        self.x[:] = self.old_x
+
+    def reset(self, x):
+        self.old_x = self.x.copy()
+        self.x[:] = x

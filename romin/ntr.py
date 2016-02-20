@@ -22,7 +22,7 @@
 import numpy as np
 
 
-__all__ = ['rms', 'minimize_objective_ntr']
+__all__ = ['ConvergenceFailure', 'minimize_objective_ntr', 'rms']
 
 
 class ConvergenceFailure(Exception):
