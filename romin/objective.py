@@ -22,7 +22,8 @@
 import numpy as np
 from romin.deriv_check import deriv_check
 
-__all__ = ['Rosenbrock']
+
+__all__ = ['Objective']
 
 
 class Objective(object):
@@ -111,68 +112,3 @@ class Objective(object):
             self.reset(x)
             return self.dot_hessian(y)
         deriv_check(f, g, xs, eps_x, order, nrep, rel_ftol, weights, discard, verbose)
-
-
-class Rosenbrock(Objective):
-    '''A Rosenbrock function with parameters a and b.
-
-    .. math::
-
-        f(x_0, x_1) = (a - x_0)^2 + b(x_0 - x_1^2)^2
-
-    '''
-    def __init__(self, a, b, x=None):
-        '''Initialize the Rosenbrock function
-
-        Parameters
-        ----------
-        a, b : float
-               The parameters of the Rosebrock function
-        x : np.ndarray, shape = (2,), dtype=float
-            Initial point
-        '''
-        self.a = a
-        self.b = b
-        if x is None:
-            self.x = np.zeros(2, float)
-        else:
-            self.x = x
-
-    @property
-    def dof(self):
-        return 2
-
-    @property
-    def hessian_is_approximate(self):
-        return False
-
-    def value(self):
-        return (self.a - self.x[0])**2 + self.b*(self.x[0] - self.x[1]**2)**2
-
-    def gradient(self):
-        return np.array([
-            -2*(self.a - self.x[0]) + 2*self.b*(self.x[0] - self.x[1]**2),
-            -4*self.b*(self.x[0]*self.x[1] - self.x[1]**3),
-        ])
-
-    def hessian(self):
-        return np.array([
-            [2 + 2*self.b,
-             -4*self.b*self.x[1]],
-            [-4*self.b*self.x[1],
-             -4*self.b*(self.x[0] - 3*self.x[1]**2)],
-        ])
-
-    def dot_hessian(self, y):
-        return np.dot(self.hessian(), y)
-
-    def make_step(self, delta_x):
-        self.old_x = self.x.copy()
-        self.x += delta_x
-
-    def step_back(self):
-        self.x[:] = self.old_x
-
-    def reset(self, x):
-        self.old_x = self.x.copy()
-        self.x[:] = x

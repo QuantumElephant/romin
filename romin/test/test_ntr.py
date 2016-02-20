@@ -20,6 +20,7 @@
 
 
 from romin import *
+from romin.test.test_objectives import Rosenbrock
 
 
 def test_min_ntr_rosenbrock():
