@@ -23,7 +23,7 @@ import numpy as np
 from romin.deriv_check import deriv_check
 
 
-__all__ = ['Objective']
+__all__ = ['Objective', 'HessianModelWrapper']
 
 
 class Objective(object):
@@ -53,10 +53,6 @@ class Objective(object):
         '''The dot product of the Hessian with a test vector in the current point'''
         raise NotImplementedError
 
-    def reset_hessian(self):
-        '''Reset the internal state of the history-dependent Hessian, if any'''
-        pass
-
     def make_step(self, delta_x):
         '''Apply the given step to the current point'''
         raise NotImplementedError
@@ -68,6 +64,10 @@ class Objective(object):
     def reset(self, x0):
         '''Reset the point to the given value'''
         raise NotImplementedError
+
+    def reset_hessian(self):
+        '''Reset the internal state of the history-dependent Hessian, if any'''
+        pass
 
     def test_gradient(self, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, weights=1,
                       discard=0.1, verbose=False):
@@ -112,3 +112,84 @@ class Objective(object):
             self.reset(x)
             return self.dot_hessian(y)
         deriv_check(f, g, xs, eps_x, order, nrep, rel_ftol, weights, discard, verbose)
+
+
+class HessianModelWrapper(Objective):
+    def __init__(self, objective, hessian_model):
+        """Adds a Hessian model to an objective without Hessian implementation.
+
+        Parameters
+        ----------
+        objective : Objective
+                    The original objective for which only the value and the gradient are
+                    implemented.
+        hessian_model : SR1HessianModel, LSR1HessianModel
+                        A model to build up an approximate Hessian during the
+                        optimization.
+        """
+        self.objective = objective
+        self.hessian_model = hessian_model
+        self.last_gradient = None
+        self.last_delta_x = None
+
+    @property
+    def dof(self):
+        '''The number of degrees of freedom'''
+        return self.objective.dof
+
+    @property
+    def hessian_is_approximate(self):
+        '''Whether the Hessian is approximate and history-dependent'''
+        return True
+
+    def value(self):
+        '''The value of the objective in the current point'''
+        return self.objective.value()
+
+    def gradient(self):
+        '''The gradient of the objective in the current point'''
+        gradient = self.objective.gradient()
+        if self.last_delta_x is not None:
+            self.hessian_model.feed(self.last_delta_x, gradient-self.last_gradient)
+            self.last_delta_x = None
+        self.last_gradient = gradient
+        return gradient
+
+    def hessian(self):
+        ''''The Hessian of the objective in the current point'''
+        if hasattr(self.hessian_model, 'hessian'):
+            return self.hessian_model.hessian
+        else:
+            raise NotImplementedError
+
+    def dot_hessian(self, y):
+        '''The dot product of the Hessian with a test vector in the current point'''
+        return self.hessian_model.dot_hessian(y)
+
+    def make_step(self, delta_x):
+        '''Apply the given step to the current point'''
+        if self.last_delta_x is None:
+            self.last_delta_x = delta_x
+        else:
+            raise ValueError('make_step called twice without gradient call in between.')
+        self.objective.make_step(delta_x)
+
+    def step_back(self):
+        '''Undo the last step, works only once'''
+        self.objective.step_back()
+
+    def reset(self, x0):
+        '''Reset the point to the given value'''
+        self.objective.reset(x0)
+
+    def reset_hessian(self):
+        '''Reset the internal state of the history-dependent Hessian, if any'''
+        self.hessian_model.reset()
+
+    def test_hessian(self, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, weights=1,
+                     discard=0.1, verbose=False):
+        raise NotImplementedError
+
+    def test_dot_hessian(self, xs, y, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3,
+                         weights=1, discard=0.1, verbose=False):
+        raise NotImplementedError

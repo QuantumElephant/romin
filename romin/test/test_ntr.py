@@ -20,12 +20,22 @@
 
 
 from romin import *
-from romin.test.test_objectives import Rosenbrock
+from romin.test.test_objectives import Rosenbrock, Atoms
 
 
 def test_min_ntr_rosenbrock():
     for b in xrange(3, 100, 10):
         fn = Rosenbrock(1, b, np.array([2.0, 5.0]))
         minimize_objective_ntr(fn)
-        assert abs(fn.gradient()).max() < 1e-7
+        assert rms(fn.gradient()) < 1e-7
         assert abs(fn.x - 1.0).max() < 1e-7
+
+
+def test_min_ntr_noble_atoms():
+    fn = Atoms(1.0, 1.0, 1, 10, np.random.normal(0, 2, 30))
+    #x0 = np.random.normal(0, 7, 30)
+    #fn.reset(x0)
+    hm = SR1HessianModel(4)
+    wr = HessianModelWrapper(fn, hm)
+    minimize_objective_ntr(wr, maxiter=1024)
+    assert rms(fn.gradient()) < 1e-7

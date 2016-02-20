@@ -89,15 +89,17 @@ class Rosenbrock(Objective):
         self.x[:] = x
 
 
-class NobleAtoms(Objective):
-    '''The potential energy of a (small) number of noble gas atoms'''
-    def __init__(self, epsilon, sigma, natom, x):
+class Atoms(Objective):
+    '''The potential energy of a (small) number of Lennard-Jones-like atoms'''
+    def __init__(self, epsilon, sigma, power, natom, x):
         '''Initialize the potential energy of the noble gass atoms
 
         Parameters
         ----------
         epsilon, sigma : float
                          Lennard-Jones parameters
+        power : int
+                The power for the attractive term. Use 6 for normal LJ form
         natom : int
                 The number of atoms
         x : np.ndarray, shape = (3*natom,), dtype=float
@@ -105,6 +107,7 @@ class NobleAtoms(Objective):
         '''
         self.epsilon = epsilon
         self.sigma = sigma
+        self.power = power
         self.natom = natom
         self.x = np.array(x)
         if self.x.shape != (3*natom, ):
@@ -126,7 +129,8 @@ class NobleAtoms(Objective):
                 pos1 = self.x[3*iatom1:3*iatom1+3]
                 d = np.linalg.norm(pos0 - pos1)
                 r = self.sigma/d
-                result += self.epsilon*(r**12 - r**6)
+                rp = r**self.power
+                result += 4*self.epsilon*(rp**2 - rp)
         return result
 
     def gradient(self):
@@ -140,7 +144,8 @@ class NobleAtoms(Objective):
                 delta = pos0 - pos1
                 dist = np.linalg.norm(delta)
                 r = self.sigma/dist
-                g = -6*self.epsilon*(2*r**12 - r**6)*(delta/dist**2)
+                rp = r**self.power
+                g = -4*self.power*self.epsilon*(2*rp**2 - rp)*(delta/dist**2)
                 g0 += g
                 g1 -= g
         return result
@@ -193,7 +198,7 @@ def test_dot_hessian():
 
 
 def test_gradient():
-    fn = NobleAtoms(1.0, 1.0, 10, np.zeros(30, float))
+    fn = Atoms(1.0, 1.0, 6, 10, np.zeros(30, float))
     with numpy_random_seed(2):
         xs = [np.random.normal(0, 7, 30) for ix in xrange(100)]
         fn.test_gradient(xs, nrep=4)

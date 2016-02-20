@@ -23,7 +23,7 @@ import numpy as np
 from horton import log
 
 
-__all__ = ['minimize_objective_ntr']
+__all__ = ['rms', 'minimize_objective_ntr']
 
 
 class ConvergenceFailure(Exception):
@@ -31,7 +31,7 @@ class ConvergenceFailure(Exception):
     pass
 
 
-def minimize_objective_ntr(objective, grms_threshold=1e-8, maxiter=128):
+def minimize_objective_ntr(objective, grms_threshold=1e-7, maxiter=128):
     """Minimize the objective function
 
     Parameters

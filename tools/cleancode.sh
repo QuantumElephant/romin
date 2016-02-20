@@ -9,5 +9,5 @@ find romin *.* scripts tools | \
 # Remove files that "contaminate" the source tree. The cmake build dir should be included
 # here.
 rm -vfr build
-rm -vf denspart/cppext.so
-rm -vf denspart/cppext.cpp
+rm -vf romin/*.pyc
+rm -vf romin/test/*.pyc
