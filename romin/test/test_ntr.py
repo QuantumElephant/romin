@@ -21,6 +21,7 @@
 
 from romin import *
 from romin.test.test_objectives import Rosenbrock, Atoms
+from romin.test.random_seed import numpy_random_seed
 
 
 def test_min_ntr_rosenbrock():
@@ -31,11 +32,21 @@ def test_min_ntr_rosenbrock():
         assert abs(fn.x - 1.0).max() < 1e-7
 
 
-def test_min_ntr_noble_atoms():
-    fn = Atoms(1.0, 1.0, 1, 10, np.random.normal(0, 2, 30))
-    #x0 = np.random.normal(0, 7, 30)
-    #fn.reset(x0)
-    hm = SR1HessianModel(4)
-    wr = HessianModelWrapper(fn, hm)
-    minimize_objective_ntr(wr, maxiter=1024)
-    assert rms(fn.gradient()) < 1e-7
+def test_min_ntr_noble_atoms_sr1():
+    for irep in xrange(10):
+        with numpy_random_seed(irep):
+            fn = Atoms(1.0, 1.0, 1, 10, np.random.normal(0, 2, 30))
+            hm = SR1HessianModel()
+            wr = HessianModelWrapper(fn, hm)
+            minimize_objective_ntr(wr, maxiter=5125)
+            assert rms(fn.gradient()) < 1e-7
+
+
+def test_min_ntr_noble_atoms_lsr1():
+    for irep in xrange(10):
+        with numpy_random_seed(irep):
+            fn = Atoms(1.0, 1.0, 1, 10, np.random.normal(0, 2, 30))
+            hm = LSR1HessianModel(7)
+            wr = HessianModelWrapper(fn, hm)
+            minimize_objective_ntr(wr, maxiter=5125)
+            assert rms(fn.gradient()) < 1e-7

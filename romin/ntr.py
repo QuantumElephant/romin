@@ -112,8 +112,8 @@ def minimize_objective_ntr(objective, grms_threshold=1e-7, maxiter=128):
         if log.do_high:
             log('   Estimated objective change: %17.10e' % estimated_change)
             log('   Actual objective change:    %17.10e' % (new_value - value))
-            log('   Estimated gradient RMS:  %17.10e' % rms(estimated_g))
-            log('   Actual    gradient RMS:  %17.10e' % rms(new_gradient))
+            log('   Estimated gradient RMS:     %17.10e' % rms(estimated_g))
+            log('   Actual    gradient RMS:     %17.10e' % rms(new_gradient))
 
         # Check if step is acceptable
         acceptable = True
@@ -153,11 +153,11 @@ def minimize_objective_ntr(objective, grms_threshold=1e-7, maxiter=128):
         v_crit = (new_value - (value + estimated_change))/abs(estimated_change)
         g_crit = rms(estimated_g - new_gradient)/rms(new_gradient)
         if log.do_high:
-            log('   Value Criterion:         %15.1f%%' % (v_crit*100))
-            log('   Gradient Criterion:      %15.1f%%' % (g_crit*100))
-        if v_crit > 0.3 or g_crit > 0.3:
+            log('   Value Criterion (ignored):    %15.1f%%' % (v_crit*100))
+            log('   Gradient Criterion:           %15.1f%%' % (g_crit*100))
+        if g_crit > 0.5:
             if log.do_high:
-                log('   Poor extrapolation of value or gradient!')
+                log('   Poor extrapolation of gradient!')
                 log('   Trust radius will be reduced.')
             trs.trust_radius *= 0.7
             if g_crit > 3.0:
