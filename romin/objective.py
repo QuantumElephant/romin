@@ -68,7 +68,7 @@ class Objective(object):
         '''Reset the point to the given value'''
         raise NotImplementedError
 
-    def test_gradient(self, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3,
+    def test_gradient(self, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, weights=1,
                       discard=0.1, verbose=False):
         '''Test the gradient implementation
 
@@ -80,10 +80,10 @@ class Objective(object):
         def g(x):
             self.reset(x)
             return self.gradient()
-        deriv_check(f, g, xs, eps_x, order, nrep, rel_ftol, discard, verbose)
+        deriv_check(f, g, xs, eps_x, order, nrep, rel_ftol, weights, discard, verbose)
 
 
-    def test_hessian(self, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3,
+    def test_hessian(self, xs, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3, weights=1,
                      discard=0.1, verbose=False):
         '''Test the hessian implementation
 
@@ -95,11 +95,11 @@ class Objective(object):
         def g(x):
             self.reset(x)
             return self.hessian()
-        deriv_check(f, g, xs, eps_x, order, nrep, rel_ftol, discard, verbose)
+        deriv_check(f, g, xs, eps_x, order, nrep, rel_ftol, weights, discard, verbose)
 
 
     def test_dot_hessian(self, xs, y, eps_x=1e-4, order=8, nrep=None, rel_ftol=1e-3,
-                         discard=0.1, verbose=False):
+                         weights=1, discard=0.1, verbose=False):
         '''Test the dot_hessian implementation
 
         See ``romin.deriv_check.deriv_check`` for the documentation of the parameters.
@@ -110,7 +110,7 @@ class Objective(object):
         def g(x):
             self.reset(x)
             return self.dot_hessian(y)
-        deriv_check(f, g, xs, eps_x, order, nrep, rel_ftol, discard, verbose)
+        deriv_check(f, g, xs, eps_x, order, nrep, rel_ftol, weights, discard, verbose)
 
 
 class Rosenbrock(Objective):
