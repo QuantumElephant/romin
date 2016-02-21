@@ -25,15 +25,18 @@ from romin.test.random_seed import numpy_random_seed
 
 
 def test_multi_gauss_diis():
+    completed = 0
     for irep in xrange(100):
         with numpy_random_seed(irep):
-            reference, xs = get_problem(5)
-            converged_a, counter_a, amps_a = run_mult_gauss_diis(reference, xs, 200, False)
+            reference, xs = get_problem(4)
+            converged_a, counter_a, amps_a = run_mult_gauss_diis(reference, xs, 500, False)
             converged_b, counter_b, amps_b = run_mult_gauss_diis(reference, xs, 200, True)
             assert counter_a >= counter_b
             assert converged_b
             if converged_a and converged_b:
+                completed += 1
                 assert abs(amps_a - amps_b).max() < 1e-10
+    assert completed > 50
 
 
 def get_problem(nsite):
@@ -54,22 +57,20 @@ def run_mult_gauss_diis(reference, xs, maxiter, do_diis):
         f = np.exp(-0.5*((xs-x0)/s0)**2) / np.sqrt(2*np.pi) / s0
         basis.append(f)
     
-    def update(amps):
+    def compute_gradient(amps):
         rho0 = sum(amp*f for amp, f in zip(amps, basis))
-        dots = np.array([(f/rho0).sum() for f in basis])
-        gradient = -dots + 1
-        new_amps = dots*amps
-        return gradient, new_amps
+        return 1 - np.array([(f/rho0).sum() for f in basis])
     
     def check(amps):
         return (amps > 0).all()
 
     amps0 = np.ones(len(reference), float)
+    gradient0 = compute_gradient(amps0)
     diis = DIIS(5)
     counter = 0
     while counter < maxiter:
-        amps1 = update(amps0)[1]
-        gradient1 = update(amps1)[0]
+        amps1 = (1 - gradient0)*amps0
+        gradient1 = compute_gradient(amps1)
         counter += 1
         #print counter, 1, rms(gradient1), amps1
         if do_diis:
@@ -81,10 +82,11 @@ def run_mult_gauss_diis(reference, xs, maxiter, do_diis):
             amps2 = amps1
             gradient2 = gradient1
         else:
-            gradient2 = update(amps2)[0]
+            gradient2 = compute_gradient(amps2)
             counter += 1
             #print counter, 2, rms(gradient2), amps2
         if rms(gradient2) < 1e-15:
             return True, counter, amps2
         amps0 = amps2
+        gradient0 = gradient2
     return False, counter, amps2
