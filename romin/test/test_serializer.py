@@ -19,10 +19,22 @@
 #--
 
 
-from romin.deriv_check import *
-from romin.diis import *
-from romin.hessian_models import *
-from romin.ntr import *
-from romin.objective import *
-from romin.porcelain import *
-from romin.serializer import *
+import numpy as np
+from romin import *
+
+
+def test_serializer():
+    serializer = Serializer()
+    a1 = np.array([1.0, 3.0, 3.0])
+    b1 = 2.5
+    c1 = np.array([[2.0, 3.0], [0.5, 0.3]])
+    x = serializer(a1, b1, c1)
+    assert (x == [1.0, 3.0, 3.0, 2.5, 2.0, 3.0, 0.5, 0.3]).all()
+    assert len(serializer.shapes) == 3
+    assert serializer.shapes[0] == (3,)
+    assert serializer.shapes[1] == ()
+    assert serializer.shapes[2] == (2, 2)
+    a2, b2, c2 = serializer.undo(np.arange(8.0))
+    assert (a2 == [0.0, 1.0, 2.0]).all()
+    assert b2 == 3.0
+    assert (c2 == [[4.0, 5.0], [6.0, 7.0]]).all()
