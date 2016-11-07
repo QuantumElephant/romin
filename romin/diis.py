@@ -67,7 +67,7 @@ class DIIS(object):
         Parameters
         ----------
         convex : bool
-                 When True, a non-convex linar combination of previous x_list records
+                 When True, a non-convex linear combination of previous x_list records
                  is not allowed. If it occurs, the oldest record is removed from the
                  history and a new attempt is made. This is repeated until a convex
                  solution is found or until there is only one record left in the
